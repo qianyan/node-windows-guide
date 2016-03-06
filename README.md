@@ -4,15 +4,17 @@
 ##搭建 Node.js 开发环境
 ###NVM安装
 [安装nvm-windows](https://github.com/coreybutler/nvm-windows/wiki#manual-installation)
+
 1. [download nvm-noinstall.zip](https://github.com/coreybutler/nvm/releases)
 2. Update the system environment variables:
 *NVM_HOME*, *NVM_SYMLINK* (C:\Users\Program Files\nodejs **This directory should not exist**)
 3. Create *settings.txt* file
-> root: C:\Users\qinayan\bin\nvm
+````
+root: C:\Users\qinayan\bin\nvm
 path: C:\Program Files\nodejs
 arch: 64
 proxy: none
-
+```
 **tips**
 Please do not forget to run `install` in *NVM_HOME*
 ###node.js安装
