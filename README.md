@@ -320,7 +320,627 @@ C:\USERS\QIANYAN\PROJECTS\LESSON2\GREETING
 ```
 
 ##文件操作
-##进程操作
+前置条件：[安装离线文档工具](https://zealdocs.org/)
+###文件操作相关的API
+####buffer对象（数据块）
+Javascript语言本身只支持字符串操作，没有提供针对二进制数据流的操作。NodeJS提供了一个与`String`对等的全局对象`Buffer`. Buffer和整数的数组很类似，但是它是固定长度，一旦创建就不能修改。
+
+```
+var bin = new Buffer('hello', 'utf8');// <Buffer 68 65 6c 6c 6f>
+bin.toString(); //'hello'
+var bin = new Buffer([ 0x68, 0x65, 0x6c, 0x6c, 0x6f ]);
+bin.toString(); //'hello'
+
+var bin = new Buffer([ 0x68, 0x65, 0x6c, 0x6c, 0x6f ]);
+var dump = new Buffer(bin.length);
+bin.copy(dump);
+```
+####stream模块（数据流）
+Stream是一个抽象的接口，所有的stream都是EventEmitter的实例。
+当内存中无法一次装下需要处理的数据时，或者一边读取一边处理更加高效时，我们就需要用到数据流。NodeJS中通过各种Stream来提供对数据流的操作。
+```
+var fs = require('fs');
+var readStream = fs.createReadStream('README.md'); //readStream是EventEmitter的实例。
+
+readStream.on('data', function(chunk) {
+   console.log(chunk.toString()); 
+});
+
+readStream.on('end', function() {
+   console.log('end.');
+});
+```
+####fs模块
+NodeJS通过`fs`内置模块提供对文件的操作。`fs`模块提供的API基本可以分为以下三类：
+
+* 文件属性读写。
+其中常用的有fs.stat、fs.chmod、fs.chown等等。
+
+* 文件内容读写。
+其中常用的有fs.readFile、fs.readdir、fs.writeFile、fs.mkdir等等。
+
+* 底层文件操作。
+其中常用的有fs.open、fs.read、fs.write、fs.close等等。
+
+我们可以通过`require('fs')`来引用这个模块，而且该模块下的每个方法都有同步和异步的形式。
+```
+// read sync
+var file = fs.readFileSync(process.cwd() + '/README.md', 'utf8');
+console.log(file);
+
+// read async
+fs.readFile(process.cwd() + '/README.md', 'utf8', function (err, data) {
+    if(err) {
+        console.log(err);
+        return;
+    }
+    console.log(data)
+});
+```
+一段遍历当前目录的程序
+```
+var fs = require('fs');
+var p = require('path');
+
+function recursiveRead(path) {
+    if(fs.statSync(path).isFile()) {
+        console.log("File:", path);
+    } else {
+        fs.readdir(path, function(err, files) {
+            if(err) {
+                console.log(err);
+                return;
+            }
+            
+            files.forEach(function(file) {
+                var absPath = p.join(path, file);
+                if(fs.statSync(absPath).isFile()) {
+                    console.log("File:", absPath);
+                } else {
+                    console.log("Directory:", absPath);
+                    recursiveRead(absPath);
+                }
+            });
+        });  
+    }
+}
+recursiveRead(__dirname); //全局的对象__dirname，当前脚本执行的目录。
+```
+
+####path模块
+和`java`类似，NodeJS提供path来简化对文件路径的操作。
+
+* path.normalize
+```
+var path = require('path');
+path.normalize('foo/bar/..'); // 'foo'
+```
+* path.join & path.sep
+```
+path.join('foo', '/bar/', '/baz', 'par/') // 'foo\\bar\\baz\\par\\'
+path.sep // '\\'
+```
+* path.extname
+```
+path.extname('node.js') //'.js'
+```
+##小结
+* `Buffer`提供了NodeJS操作二进制的机制；
+* `Stream`是一个抽象的接口，每种stream都是EventEmitter的实例。当我们在读取大文件时，可以使用数据流一边读取，一边处理；
+* `fs`提供了文件属性读写，内容读写以及底层文件操作。
+* 不要使用字符串拼接，使用`path`简化操作
+
+##问题
+* 使用`fs`的API创建一个copy的函数；
+* NodeJS对文本编码的处理；
+* 使用第三方包`findit`重写遍历当前目录的程序。
+
 ##网络操作
+###简单的HTTP服务器
+使用`http`实现一个简单的HTTP服务器。
+```
+var http = require('http');
+http.createServer(function(req, res) {
+    res.writeHead(200, {'Content-type': 'text/plain'});
+    res.end('Hello Node.js');
+}).listen(12306);
+```
+###http模块
+http模块提供两种使用方式：
+
+* 作为服务端使用时，创建一个HTTP服务器，监听HTTP客户端请求并返回响应；
+* 作为客户端使用时，发起一个HTTP客户端请求，获取服务端响应。
+
+先创建一个HTTP服务器
+```
+//http-server.js
+var http = require('http');
+
+http.createServer(function(req, res) {
+   var body = [];
+   res.writeHead(200, {'Content-type': 'text/plain'});
+   
+   req.on('data', function(chunk) {
+      res.write(chunk);
+      body.push(chunk);
+   });
+   
+   req.on('end', function() {
+      body = Buffer.concat(body);
+      console.log(body.toString());
+      res.end();
+   })
+}).listen(12306);
+```
+再创建一个HTTP客户端
+```
+//http-client.js
+var http = require('http');
+var options = {hostname: 'localhost',
+    port: 12306,
+    method: 'POST',
+    headers: {
+        'Content-type': 'text/plain'
+    }};
+var req = http.request(options, function(res) {
+    res.on('data', function(chunk) {
+       console.log('res:', chunk.toString());
+    });
+});
+
+req.write('hello world');
+req.end();
+```
+###url模块
+* `parse`
+使用url解析成URL对象
+```
+> url.parse('http://user:pass@host.com:8080/p/a/t/h?query=string#hash
+Url {
+  protocol: 'http:',
+  slashes: true,
+  auth: 'user:pass',
+  host: 'host.com:8080',
+  port: '8080',
+  hostname: 'host.com',
+  hash: '#hash',
+  search: '?query=string',
+  query: 'query=string',
+  pathname: '/p/a/t/h',
+  path: '/p/a/t/h?query=string',
+  href: 'http://user:pass@host.com:8080/p/a/t/h?query=string#hash' }
+```
+* `format`
+format方法允许将一个URL对象转换为URL字符串
+```
+> url.format({
+...     protocol: 'http:',
+...     host: 'www.example.com',
+...     pathname: '/p/a/t/h',
+...     search: 'query=string'
+... });
+//'http://www.example.com/p/a/t/h?query=string'
+```
+* `resolve`
+resolve方法拼接两个URL
+```
+> url.resolve('http://www.baid.com/path', '../www.google.com')
+'http://www.baid.com/www.google.com'
+> url.resolve('http://example.com/one', '/two')
+'http://example.com/two'
+```
+### querystring
+```
+> querystring.parse('foo=bar&baz=qux&baz=quux&corge');
+{ foo: 'bar', baz: [ 'qux', 'quux' ], corge: '' }
+```
+##小结
+* http模块支持服务端模式和客户端模式两种使用方式；
+* request和response对象除了用于读写头数据外，可以当作数据流来操作；
+* url.parse方法加上request.url属性是处理HTTP请求时的固定搭配。
+
+##问题
+* http模块和https模块的区别？
+* 如何创建一个https服务器？
+
+##进程操作
+###API一览
+####Process
+`process`是一个全局的对象，可以在node环境中随处访问。并且它是EventEmitter的实例。
+一个进程对象里头到底包含些什么属性？
+```
+pid
+stdio
+argv
+env
+```
+只在POSIX平台支持的函数
+```
+getuid
+getgid
+geteuid 
+getegid
+```
+进程ID、标准输入输出以及错误流、启动进程的参数、运行环境、运行时权限。
+#####应用场景
+* 获取命令行参数
+```
+// index.js
+console.log(process.argv);
+
+> node index.js helo
+[ 'C:\\Program Files\\nodejs\\node.exe', //node的执行路径
+  'C:\\Users\\qianyan\\Projects\\lesson5\\index.js', //文件路径
+  'hello' ] //参数
+
+```
+一般获取参数的写法
+```
+process.argv.splice(2)
+```
+* 退出程序
+类似Java中的`System.exit(1)`，当我们捕获一个异常，同时觉得程序需要立即停止时，就执行`process.exit(1)`来表示非正常退出。
+
+* 控制输入和输出
+`stdin`是只读流，而`stdout`和`stderr`都是只写流。`console.log`等价于
+```
+console.log = (msg) => {
+  process.stdout.write(`${msg}\n`);
+};
+```
+####Child Process
+`child_process`是一个内置模块，可以创建和控制子进程。该模块的主要功能都是`child_process.spawn()`函数提供的。其余诸如`exec`, `fork`, `execFile`等都是对`spawn()`进行的封装。
+
+#####应用场景
+* 创建子进程
+
+```javascript
+//(command[, args][, options])
+const spawn = require('child_process').spawn;
+const echo = spawn('cmd', ['/c', 'env'], {env: process.env});//尝试设置{env: {}}，观察结果。 
+
+echo.stdout.on('data', (data) => {
+    console.log(`stdout: ${data}`);
+})
+```
+第一参数是可执行文件的路径，第二参数是数组对应可执行文件接收的参数，第三参数用于配置子进程运行的环境和行为。
+* 进程间通信
+如果父子进程都是Node.js的进程，那么就可以通过IPC通道通信。
+
+```javascript
+//parent.js
+const spawn = require('child_process').spawn;
+const child = spawn('node', ['child.js'], {
+    stdio: [process.stdin, process.stdout, process.stderr, 'ipc']
+});
+
+child.on('message', (msg) => {
+    console.log('parent:', msg);
+});
+
+child.send({hello: 'world'});
+
+//child.js
+process.on('message', (msg) => {
+    console.log('child:', msg);
+    msg.hello = msg.hello.toUpperCase();
+    process.send(msg);
+})
+=>
+child: { hello: 'world' }
+parent: { hello: 'WORLD' }
+```
+父进程在创建子进程的时候，使用了`options.stdio`的`ipc`额外开辟了一条通道，之后开始监听子进程的`message`事件来接收子进程的消息，同时通过`send`方法给子进程发送消息。子进程则通过`process`对象监听来自父进程的消息，并通过`process.send`方法向父进程发送消息。
+####Cluster
+单个实例的Node.js运行在单独的进程当中。但是我们有时候可能需要利用多核处理器的优势，在每个单独的核上跑一个Node.js的进程。
+`Cluster`就是创造出来简化多进程服务程序开发的，让每一个核上面运行一个工作进程，并统一通过主进程监听端口和分发请求。
+#####应用场景
+```javascript
+const cluster = require('cluster');
+const http = require('http');
+const numCPUs = require('os').cpus().length;
+
+if (cluster.isMaster) {
+  // Fork workers.
+  for (var i = 0; i < numCPUs; i++) {
+    cluster.fork();
+  }
+
+  cluster.on('exit', (worker, code, signal) => {
+    console.log(`worker ${worker.process.pid} died`);
+  });
+} else {
+  // Workers can share any TCP connection
+  // In this case it is an HTTP server
+  http.createServer((req, res) => {
+    res.writeHead(200);
+    res.end('hello world\n');
+  }).listen(8000);
+}
+=>
+NODE_DEBUG=cluster node server.js
+isMaster
+worker
+worker
+worker
+worker
+worker
+worker
+worker
+worker
+```
+该模块很简单地创建多个共享一个服务端口的子进程，而这些子进程是通过IPC和Master，也即父进程进行信息交互的，可应用于负载均衡。 
+
+##小结
+* 使用`process`对象管理进程
+* 使用`child_process`对象管理子进程，其最主要的方法就是`spawn`
+##问题
+
 ##异步编程
-##es6和es5
+NodeJS最大的卖点——事件机制和异步IO，开发者需要按照异步的方式去组织代码。
+###回调
+异步编程的直接体现就是回调函数，但是不是有回调函数，就是异步编程呢？
+```javascript
+function sum(arr, callback) {
+    var sum = 0;
+    for(var i=0; i<arr.length; i++) {
+        sum = sum + arr[i];
+    }
+    
+    callback(sum);
+}
+
+sum([1,2,3,4,5], console.log);
+=>
+15
+```
+显然，这个`callback`还是顺序（同步）执行的。我们知道，JS本身是单线程的，所以不具备多线程并发执行的特点，那么异步从何体现呢？
+我们再看一段程序：
+```javascript
+setTimeout(function() {
+    console.log("world")
+}, 1000);
+
+console.log("hello");
+=>
+hello
+world
+```
+上面的例子先打印出“hello”，然后打印出“world”。看上去好像是`setTimeout()`另外启动了一个“平行线程”，等待了1秒钟之后，调用回调函数打印“world”。
+JS中提供了两大类异步函数，一种是计时函数，如：`setTimeout`和`setInterval`。另外一类是I/O异步函数，如：`fs.readFile`。
+
+但是JS是单线程的。也就是说如果“主”线程一直处于忙碌状态，即使“平行”线程完成工作，通知“主”线程调用它的回调函数，也会等到“主”线程空闲了才能真正去调用。
+```javascript
+var t = new Date();
+setTimeout(function () {
+    console.log("waiting time: ", new Date() - t);
+}, 1000);
+
+while(new Date() - start < 1000);
+=>
+waiting time: 1094 //大于我们设置的1000毫秒
+```
+
+###返回值
+我们分别使用同步和异步实现一个函数，判断当前目录下的文件是否都是File，最终程序返回一个布尔值的数组，如：`[true, false]`
+当前目录文件结构如下：
+```
+|_async.js
+|_sync.js
+|_ dir/
+```
+####比较中学习
+* 同步方式下
+
+```javascript
+const fs = require('fs');
+const path = require('path');
+
+const dirs = fs.readdirSync('.');
+const areFiles = dirs.map((dirName) => {    
+    return fs.statSync(path.join('.', dirName)).isFile();
+});
+
+console.log(areFiles);
+=> [true, false, true]
+```
+* 异步方式下
+*失败的尝试*
+
+```javascript
+const fs = require('fs');
+const path = require('path');
+
+fs.readdir('.', (err, dirs) => {
+    const areFiles = [];
+    
+    dirs.forEach((dirName) => {  
+        fs.stat(path.join('.', dirName), (err, stat) => {
+            areFiles.push(stat.isFile());
+        })
+    });
+    
+    console.log(areFiles);
+});
+=> [] //思考为何是空数组？
+```
+*成功的尝试*
+
+```javascript
+const fs = require('fs');
+const path = require('path');
+
+fs.readdir('.', (err, dirs) => {
+    const areFiles = [];
+    
+    dirs.forEach((dirName) => {  
+        fs.stat(path.join('.', dirName), (err, stat) => {
+            areFiles.push(stat.isFile());
+            
+            if(areFiles.length == dirs.length) { //使用标志来位判断所有的回调都已经调用完毕
+                console.log(areFiles);
+            }
+        })
+    });
+});
+=>[ true, true, false ] or [true, false, true]
+```
+####总结
+1. 同步方法顺序取返回值，而异步方法总是在回调函数的取返回值
+2. 循环遍历中调用同步方法很容易，但是同样地在异步方法中，需要使用**标志位**来判断是否所有回调函数都已经调用完毕
+3. 异步函数的执行回调是无序的
+
+###数组的串行处理
+我们看到上个例子里的异步的写法，最后的返回结果其实是无序的。使用标志位只能保证数组中的所有数据对应的回调函数都得以执行，但不能保证哪个回调函数先返回。要想顺序执行，那么必须是一个回调函数中包含另一个回调函数。拿上面的例子尝试：
+
+```javascript
+const fs = require('fs');
+const path = require('path');
+
+fs.readdir('.', (err, dirs) => {
+    (function iterate(index, areFiles, callback) {
+        if(index < dirs.length) {
+            fs.stat(path.join('.', dirs[index]), (err, stat) => {
+                areFiles.push(stat.isFile());
+                iterate(index + 1, areFiles, callback);
+            });  
+        } else {
+           callback(areFiles);
+        }
+    }(0, [], (result) => {
+        console.log(result);
+    }));
+});
+```
+####在场景中学习
+假如我们有这样一个场景：有一系列的HTTP请求的URL构成的数组和一个初始值。这些HTTP请求是有依赖的，后一个的执行必须依赖前一个HTTP请求的响应。如果只是两个请求，我们可以很轻松地写出这样的代码：
+
+```javascript
+const http = require('http');
+const urls = ['localhost', 'www.baidu.com']; //多个urls的数组
+
+const req = http.request(optionsWithHostname(urls[0]), (res) => { //第一次请求
+    res.on('data', (chunk) => {
+        const req2 = http.request(optionsWithHostname(urls[1]), (res2) => {  //第二次请求
+            res2.on('data', (chunk2) => {
+                //dosometing here...
+            });
+        });
+        req2.write(chunk.toString() + 'agian');
+        req2.end();
+    });
+});
+
+req.write('hello world');
+req.end();
+
+function optionsWithHostname(hostname) {
+    return {
+    hostname: hostname,
+    port: 12306,
+    method: 'POST',
+    headers: {
+        'Content-type': 'text/plain'
+    }};
+}
+```
+但如果是十个或者更多，这样的写法就不好使了。
+
+我们知道异步函数必须在回调中才能使用其返回值，这样会很容易写出类似于`>`形状的回调套回调的写法。而递归的写法也正好符合这样的形状，所以尝试一下：
+
+```javascript
+const urls = ['localhost', 'www.baidu.com']; //多个urls的数组
+
+(function next(i, len, initValue, callback) {
+    if (i < len) {
+    // 将http请求过程简化成了async
+        async(urls[i], (value) => {
+            console.log(value);
+            next(i + 1, len, value, callback);
+        });
+    } else {
+        callback();
+    }
+}(0, urls.length, 'hello world', () => {
+   //dosomething here...
+}));
+```
+####总结
+* 在异步函数想要保证执行的顺序，就必须一个回调套一个回调
+* 可以利用递归的写法，在保证执行顺序的同时，处理系列或者不定长度的数据
+
+###异常处理
+####在比较中学习
+* 同步方式下
+
+```javascript
+//try ... catch ...
+
+try {
+    x.func();
+} catch (err) {
+   console.log("I catch you ", err);
+}
+=> I catch you  [ReferenceError: x is not defined]
+```
+
+* 异步方式下
+
+```javascript
+try {
+    setTimeout(() => {
+        x.func();
+    }, 0);
+} catch (err) {
+   console.log("I catch you ", err);
+}
+=> C:\Users\qianyan\Projects\lesson6\exception\async.js:5
+        x.func();
+        ^
+
+ReferenceError: x is not defined
+    at null._onTimeout (C:\Users\qianyan\Projects\lesson6\exception\async.js:5:9)
+```
+可以看到，同步方式下异常会沿着代码执行路径一直冒泡，直到遇到第一个try语句时被捕获住。但由于异步函数会打断代码执行路径，异步函数执行过程中以及执行之后产生的异常冒泡到执行路径被打断的位置时，如果一直没有遇到try语句，就作为一个全局异常抛出。
+
+解决方式就是在异常被作为全局异常抛出之前，try-catch住，如下：
+
+```javascript
+setTimeout(() => {
+    try {
+        x.func();
+    } catch (err) {
+        console.log("I catch you ", err);
+    }
+}, 0);
+=> I catch you  [ReferenceError: x is not defined]
+```
+这样异常又被捕获了。不妨，对`setTimetout`做一次封装
+
+```javascript
+function wrapSetTimeout(fn, callback) {
+    setTimeout(() => {
+        try {
+            callback(null, fn());
+        } catch (err) {
+            callback(err);
+        }
+    }, 0);
+}
+
+wrapSetTimeout(() => {x.func()}, (err, data) => {
+    if(err) console.log("I catch you again", err);
+})
+=>I catch you again [ReferenceError: x is not defined
+```
+Node.js的整个异步函数的异常设计都是如此，callback的首个参数都是err。
+
+####总结
+* try-catch在同步方式下很有效，但在异步方式下做不到
+* callback首个参数是err，是因为大多数API都遵循了一致的风格
+
+##小结
+* 不掌握异步编程就不算学会NodeJS
+* 异步编程依托于回调来实现，而使用回调不一定就是异步编程
+* 异步编程下的函数间数据传递、数组遍历和异常处理与同步编程有很大差别
+
